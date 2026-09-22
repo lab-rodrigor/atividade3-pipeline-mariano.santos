@@ -1,0 +1,51 @@
+name: deploy
+
+# O pipeline faz o que você fez à mão na atividade 2. A cada push na main, ele
+# derruba a topologia e sobe de novo, do zero.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  # TODO: troque pelo seu slug, o começo do seu e-mail com ponto virando hífen.
+  SLUG: SEU-SLUG
+  # TODO: a primeira porta da sua faixa. Veja em `gr-docker ajuda`.
+  PORTA: 230N0
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar a chave de deploy
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          ssh-keyscan -H gr.lab.ayty.org >> ~/.ssh/known_hosts
+
+      - name: Derrubar a topologia antiga
+        run: |
+          # TODO: apague os três containers, se existirem.
+          # Dica: o passo não pode falhar quando eles ainda não existem.
+          echo "TODO"
+
+      - name: Criar rede e volume
+        run: |
+          # TODO: as duas redes e o volume. A rede do banco é interna.
+          # Dica: criar o que já existe devolve erro. Trate isso.
+          echo "TODO"
+
+      - name: Subir banco, API e front
+        run: |
+          # TODO: os três containers, na ordem certa.
+          # O front precisa receber o commit que o deploy publicou:
+          #   -e DEPLOY_SHA=${{ github.sha }}
+          echo "TODO"
+
+      - name: Conferir que subiu
+        run: |
+          # TODO: pergunte ao servidor se a listagem responde.
+          echo "TODO"
