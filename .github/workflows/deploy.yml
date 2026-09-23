@@ -1,6 +1,6 @@
-name: deploy
+﻿name: deploy
 
-# O pipeline faz o que você fez à mão na atividade 2. A cada push na main, ele
+# O pipeline faz o que voce fez a mao na atividade 2. A cada push na main, ele
 # derruba a topologia e sobe de novo, do zero.
 on:
   push:
@@ -8,10 +8,8 @@ on:
   workflow_dispatch:
 
 env:
-  # TODO: troque pelo seu slug, o começo do seu e-mail com ponto virando hífen.
   SLUG: mariano-santos
-  # TODO: a primeira porta da sua faixa. Veja em `gr-docker ajuda`.
-  PORTA: 23000 # Mude para a sua porta correta
+  PORTA: 23200
 
 jobs:
   deploy:
@@ -28,54 +26,61 @@ jobs:
 
       - name: Derrubar a topologia antiga
         run: |
-          ssh -i ~/.ssh/deploy gr-${SLUG}@gr.lab.ayty.org gr-docker rm -f front backend postgres || true
+          ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker rm -f front || true'
+          ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker rm -f api || true'
+          ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker rm -f banco || true'
 
-name: deploy
-
-# O pipeline faz o que você fez à mão na atividade 2. A cada push na main, ele
-# derruba a topologia e sobe de novo, do zero.
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
-
-env:
-  # TODO: troque pelo seu slug, o começo do seu e-mail com ponto virando hífen.
-  SLUG: mariano-santos
-  # TODO: a primeira porta da sua faixa. Veja em `gr-docker ajuda`.
-  PORTA: 23000 # Mude para a sua porta correta
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Preparar a chave de deploy
+      - name: Criar redes e volume
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy
-          chmod 600 ~/.ssh/deploy
-          ssh-keyscan -H gr.lab.ayty.org >> ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker network create web || true'
+          ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker network create dados --interna || true'
+          ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker volume create pgdata || true'
 
-      - name: Derrubar a topologia antiga
+      - name: Subir banco
         run: |
-          ssh -i ~/.ssh/deploy gr-${SLUG}@gr.lab.ayty.org gr-docker rm -f front backend postgres || true
+          ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org \
+            'gr-docker run postgres:17-alpine \
+              --name banco \
+              --network dados \
+              -e POSTGRES_PASSWORD=${{ secrets.DB_SENHA }} \
+              -e POSTGRES_DB=pokedex \
+              -v pgdata:/var/lib/postgresql/data \
+              -d'
 
-      - name: Criar rede e volume
+      - name: Subir API
         run: |
-          ssh -i ~/.ssh/deploy gr-${SLUG}@gr.lab.ayty.org gr-docker network create --internal backend || true
-          ssh -i ~/.ssh/deploy gr-${SLUG}@gr.lab.ayty.org gr-docker network create frontend || true
-          ssh -i ~/.ssh/deploy gr-${SLUG}@gr.lab.ayty.org gr-docker volume create pgdata || true
+          ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org \
+            'gr-docker run gr-atv2-api:1 \
+              --name api \
+              --network dados \
+              -e POSTGRES_HOST=gr-${{ env.SLUG }}-banco \
+              -e POSTGRES_DB=pokedex \
+              -e POSTGRES_PASSWORD=${{ secrets.DB_SENHA }} \
+              -d && \
+             gr-docker network connect web api || true'
 
-      - name: Subir banco, API e front
+      - name: Subir Front
         run: |
-          # TODO: os três containers, na ordem certa.
-          # O front precisa receber o commit que o deploy publicou:
-          #   -e DEPLOY_SHA=${{ github.sha }}
-          echo "TODO"
+          ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org \
+            'gr-docker run gr-atv2-front:1 \
+              --name front \
+              --network web \
+              -e API=gr-${{ env.SLUG }}-api \
+              -e DEPLOY_SHA=${{ github.sha }} \
+              -p ${{ env.PORTA }}:80 \
+              -d'
 
       - name: Conferir que subiu
         run: |
-          # TODO: pergunte ao servidor se a listagem responde.
-          echo "TODO"
+          for i in {1..6}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              http://gr.lab.ayty.org:${{ env.PORTA }}/api/pokemons || echo "000")
+            if [ "$STATUS" -eq 200 ]; then
+              echo "OK - Front respondeu (HTTP 200)."
+              exit 0
+            fi
+            echo "Tentativa $i falhou (status $STATUS). Aguardando 10s..."
+            sleep 10
+          done
+          echo "ERRO - Front nao respondeu apos 60 segundos."
+          exit 1
