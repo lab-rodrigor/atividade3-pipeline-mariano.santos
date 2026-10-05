@@ -10,9 +10,29 @@ on:
 env:
   SLUG: mariano-santos
   PORTA: 23200
+  DB_SENHA: ${{ secrets.DB_SENHA }}
 
 jobs:
+  check-connection:
+    name: Teste e Validação Inicial
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Preparar a chave de deploy
+        run: |
+          set -x
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          ssh-keyscan -H gr.lab.ayty.org >> ~/.ssh/known_hosts
+
+      - name: Testar Conexão SSH
+        run: |
+          set -x
+          ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'echo "Conexao SSH OK!"'
+
   deploy:
+    needs: check-connection
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -33,6 +53,15 @@ jobs:
           ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker rm -f api || true'
           ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker rm -f banco || true'
 
+      - name: Validar disponibilidade da porta externa
+        run: |
+          set -x
+          sleep 5 # Aguarda o SO liberar a porta completamente
+          if nc -w 5 -zv gr.lab.ayty.org ${{ env.PORTA }} 2>/dev/null; then
+            echo "ERRO: A porta ${{ env.PORTA }} continua em uso no servidor mesmo apos derrubarmos nosso container! Possivel conflito com outro aluno."
+            exit 1
+          fi
+
       - name: Criar redes e volume
         run: |
           set -x
@@ -47,7 +76,7 @@ jobs:
             'gr-docker run postgres:16-alpine \
               --name banco \
               --network dados \
-              -e POSTGRES_PASSWORD=${{ secrets.DB_SENHA }} \
+              -e POSTGRES_PASSWORD=${{ env.DB_SENHA }} \
               -e POSTGRES_DB=pokedex \
               -v pgdata:/var/lib/postgresql/data \
               -d'
@@ -61,7 +90,7 @@ jobs:
               --network dados \
               -e POSTGRES_HOST=gr-${{ env.SLUG }}-banco \
               -e POSTGRES_DB=pokedex \
-              -e POSTGRES_PASSWORD=${{ secrets.DB_SENHA }} \
+              -e POSTGRES_PASSWORD=${{ env.DB_SENHA }} \
               -d && \
              gr-docker network connect web api || true'
 
@@ -92,3 +121,23 @@ jobs:
           done
           echo "ERRO - Front nao respondeu apos 60 segundos."
           exit 1
+
+  rollback:
+    name: Rollback em Caso de Falha
+    needs: deploy
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preparar a chave de deploy
+        run: |
+          set -x
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          ssh-keyscan -H gr.lab.ayty.org >> ~/.ssh/known_hosts
+
+      - name: Limpar topologia falha
+        run: |
+          set -x
+          echo "Rollback ativado: Houve erro no deploy. Removendo containers..."
+          ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker rm -f front api banco || true'
