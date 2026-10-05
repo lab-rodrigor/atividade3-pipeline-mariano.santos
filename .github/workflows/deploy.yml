@@ -1,4 +1,4 @@
-﻿name: deploy
+name: deploy
 
 # O pipeline faz o que voce fez a mao na atividade 2. A cada push na main, ele
 # derruba a topologia e sobe de novo, do zero.
