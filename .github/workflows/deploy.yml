@@ -73,38 +73,38 @@ jobs:
         run: |
           set -x
           ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org \
-            'gr-docker run postgres:16-alpine \
+            'gr-docker run -d \
               --name banco \
               --network dados \
               -e POSTGRES_PASSWORD=${{ env.DB_SENHA }} \
               -e POSTGRES_DB=pokedex \
               -v pgdata:/var/lib/postgresql/data \
-              -d'
+              postgres:16-alpine'
 
       - name: Subir API
         run: |
           set -x
           ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org \
-            'gr-docker run gr-atv2-api:1 \
+            'gr-docker run -d \
               --name api \
               --network dados \
               -e POSTGRES_HOST=gr-${{ env.SLUG }}-banco \
               -e POSTGRES_DB=pokedex \
               -e POSTGRES_PASSWORD=${{ env.DB_SENHA }} \
-              -d && \
+              gr-atv2-api:1 && \
              gr-docker network connect web api || true'
 
       - name: Subir Front
         run: |
           set -x
           ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org \
-            'gr-docker run gr-atv2-front:1 \
+            'gr-docker run -d \
               --name front \
               --network web \
               -e API=gr-${{ env.SLUG }}-api \
               -e DEPLOY_SHA=${{ github.sha }} \
               -p ${{ env.PORTA }}:80 \
-              -d'
+              gr-atv2-front:1'
 
       - name: Conferir que subiu
         run: |
