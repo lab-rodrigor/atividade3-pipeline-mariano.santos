@@ -66,7 +66,7 @@ jobs:
         run: |
           set -x
           ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker network create web || true'
-          ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker network create dados --interna || true'
+          ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker network create dados --internal || true'
           ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker volume create pgdata || true'
 
       - name: Subir banco
