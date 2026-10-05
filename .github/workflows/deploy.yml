@@ -20,6 +20,7 @@ jobs:
 
       - name: Preparar a chave de deploy
         run: |
+          set -x
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy
           chmod 600 ~/.ssh/deploy
@@ -27,18 +28,21 @@ jobs:
 
       - name: Derrubar a topologia antiga
         run: |
+          set -x
           ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker rm -f front || true'
           ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker rm -f api || true'
           ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker rm -f banco || true'
 
       - name: Criar redes e volume
         run: |
+          set -x
           ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker network create web || true'
           ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker network create dados --interna || true'
           ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org 'gr-docker volume create pgdata || true'
 
       - name: Subir banco
         run: |
+          set -x
           ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org \
             'gr-docker run postgres:16-alpine \
               --name banco \
@@ -50,6 +54,7 @@ jobs:
 
       - name: Subir API
         run: |
+          set -x
           ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org \
             'gr-docker run gr-atv2-api:1 \
               --name api \
@@ -62,6 +67,7 @@ jobs:
 
       - name: Subir Front
         run: |
+          set -x
           ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org \
             'gr-docker run gr-atv2-front:1 \
               --name front \
@@ -73,6 +79,7 @@ jobs:
 
       - name: Conferir que subiu
         run: |
+          set -x
           for i in {1..6}; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
               http://gr.lab.ayty.org:${{ env.PORTA }}/api/pokemons || echo "000")
