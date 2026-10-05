@@ -14,6 +14,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -39,7 +40,7 @@ jobs:
       - name: Subir banco
         run: |
           ssh -i ~/.ssh/deploy gr-${{ env.SLUG }}@gr.lab.ayty.org \
-            'gr-docker run postgres:17-alpine \
+            'gr-docker run postgres:16-alpine \
               --name banco \
               --network dados \
               -e POSTGRES_PASSWORD=${{ secrets.DB_SENHA }} \
